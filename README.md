@@ -111,21 +111,27 @@ POST /v1/convert
 
 The conversion endpoint accepts a multipart PDF upload and optional form fields: `output_format` (`markdown`, `json`, or `html`), `mode`, `use_llm`, `force_ocr`, `page_range`, `processors`, `disable_image_extraction`, and `disable_multiprocessing`.
 
+The upload field is named `file`. The default upload limit is 50 MiB (`MAX_UPLOAD_BYTES`). The filename must end in `.pdf`, and the content must have a `%PDF-` signature. Unknown form fields are rejected with `422 unknown_conversion_options`; in particular, `paginate_output` is not supported.
+
 Example:
 
 ```powershell
 curl.exe -F "file=@sample.pdf" -F "output_format=markdown" http://127.0.0.1:8000/v1/convert
 ```
 
-Markdown and HTML are returned as text responses; JSON is returned as JSON. Errors use the structured shape `{ "error": { "code", "message", "details" } }`.
+Markdown and HTML are returned as text responses; JSON is returned as the direct JSON document produced by the pinned `marker-pdf==2.0.0` renderer. MarkerServe does not wrap JSON in a `success`/`output` envelope. The JSON renderer normally returns a document with top-level `children` and `block_type`, with page and block nodes containing fields such as `id`, `block_type`, `html`, `polygon`, `bbox`, and nested `children`. Upstream `metadata` is excluded by MarkerServe. See [`docs/api-contract.md`](docs/api-contract.md) for the compatibility contract and example; [`docs/ariadne-integration.md`](docs/ariadne-integration.md) records the client-side migration notes.
+
+Every successful conversion includes `X-MarkerServe-Output-Format` and `X-MarkerServe-Duration-Seconds` headers. Errors use the structured shape `{ "error": { "code", "message", "details" } }`.
 
 `/health/live` only reports process liveness. `/health/ready` returns `503` until Marker’s model runtime is initialized and, when `MARKER_USE_LLM=true`, the configured VLM endpoint and model are available.
+
+`/version` returns the MarkerServe version, API schema version, `marker-pdf` version, Python version, VLM mode/base URL/model, and Marker mode. It is available independently of readiness.
 
 ## Concurrency, storage, and limitations
 
 The initial service serializes conversion work with a one-slot in-process semaphore. With the default zero-second queue timeout, a second simultaneous request receives `429 conversion_busy`; increase `CONVERSION_QUEUE_TIMEOUT_SECONDS` to allow bounded waiting. This is intentionally not a durable queue and does not provide job history.
 
-Uploads are written to a temporary file only for the duration of conversion and removed on success or failure. There is no database, authentication, web UI, or automatic llama.cpp/model installation.
+Uploads are written to a temporary file only for the duration of conversion and removed on success or failure. There is no database, authentication, web UI, durable queue, idempotency key, or automatic llama.cpp/model installation. There is no application-level conversion timeout; configure a client or reverse-proxy timeout appropriate to the deployment.
 
 Marker initialization is intentionally lazy at import time but occurs during application startup. If it fails, liveness remains available while readiness reports the failure.
 

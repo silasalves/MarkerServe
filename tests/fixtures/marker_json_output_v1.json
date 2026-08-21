@@ -1,0 +1,25 @@
+{
+  "children": [
+    {
+      "id": "/page/0",
+      "block_type": "Page",
+      "html": "<content-ref src='/page/0/Text/0'></content-ref>",
+      "polygon": [[0, 0], [612, 0], [612, 792], [0, 792]],
+      "bbox": [0, 0, 612, 792],
+      "children": [
+        {
+          "id": "/page/0/Text/0",
+          "block_type": "Text",
+          "html": "<p>Hello</p>",
+          "polygon": [[72, 72], [144, 72], [144, 90], [72, 90]],
+          "bbox": [72, 72, 144, 90],
+          "children": null,
+          "section_hierarchy": null,
+          "images": null
+        }
+      ],
+      "section_hierarchy": null
+    }
+  ],
+  "block_type": "Document"
+}

@@ -19,9 +19,21 @@ from .config import Settings
 from .health import VlmHealthChecker
 from .marker_runtime import MarkerConversionError, MarkerRuntime, MarkerUnavailableError
 from .schemas import ConversionOptions
-from .version import __version__
+from .version import __api_schema_version__, __version__
 
 logger = logging.getLogger(__name__)
+
+CONVERSION_FORM_FIELDS = {
+    "file",
+    "output_format",
+    "mode",
+    "use_llm",
+    "force_ocr",
+    "page_range",
+    "processors",
+    "disable_image_extraction",
+    "disable_multiprocessing",
+}
 
 
 def error_response(status_code: int, code: str, message: str, details: dict | None = None) -> JSONResponse:
@@ -65,10 +77,12 @@ def build_router(
     async def version() -> dict:
         return {
             "markerserve_version": __version__,
+            "api_schema_version": __api_schema_version__,
             "marker_pdf_version": runtime.marker_version,
             "python_version": __import__("platform").python_version(),
             "vlm_mode": settings.vlm_mode,
             "vlm_base_url": settings.vlm_base_url,
+            "vlm_model": settings.marker_openai_model,
             "marker_use_llm": settings.marker_use_llm,
             "marker_mode": settings.marker_mode,
         }
@@ -86,6 +100,16 @@ def build_router(
         disable_image_extraction: bool | None = Form(None),
         disable_multiprocessing: bool | None = Form(None),
     ) -> Response:
+        form = await request.form()
+        unknown_fields = sorted(set(form.keys()) - CONVERSION_FORM_FIELDS)
+        if unknown_fields:
+            return error_response(
+                422,
+                "unknown_conversion_options",
+                "Unknown conversion form fields",
+                {"fields": unknown_fields},
+            )
+
         try:
             options = ConversionOptions(
                 output_format=output_format or settings.marker_output_format,
@@ -146,9 +170,20 @@ def build_router(
             }
             if result.output_format == "json":
                 try:
-                    return JSONResponse(content=json.loads(result.content), headers=headers)
+                    payload = json.loads(result.content)
                 except json.JSONDecodeError:
-                    return PlainTextResponse(result.content, media_type=result.media_type, headers=headers)
+                    return error_response(
+                        500,
+                        "invalid_json_output",
+                        "Marker returned invalid JSON output",
+                    )
+                if not isinstance(payload, dict) or "children" not in payload:
+                    return error_response(
+                        500,
+                        "invalid_json_output",
+                        "Marker returned an invalid document JSON shape",
+                    )
+                return JSONResponse(content=payload, headers=headers)
             if result.output_format == "html":
                 return HTMLResponse(result.content, headers=headers)
             return PlainTextResponse(result.content, media_type=result.media_type, headers=headers)
