@@ -30,6 +30,7 @@ class ConversionResult:
     content: str
     media_type: str
     duration_seconds: float
+    markdown_content: str | None = None
 
 
 class MarkerRuntime:
@@ -101,8 +102,15 @@ class MarkerRuntime:
             from marker.config.parser import ConfigParser
             from marker.converters.pdf import PdfConverter
             from marker.output import text_from_rendered
+            from marker.renderers.json import JSONRenderer
+            from marker.renderers.markdown import MarkdownRenderer
 
             overrides = options.model_dump(exclude_none=True)
+            if options.output_format == "both":
+                # Marker selects the converter's default renderer from this
+                # value. Use a valid format for setup, then render both from
+                # the one built document below.
+                overrides["output_format"] = "json"
             config = self.settings.marker_config(overrides)
             parser = ConfigParser(config)
             converter_cls = parser.get_converter_cls() if hasattr(parser, "get_converter_cls") else PdfConverter
@@ -118,8 +126,18 @@ class MarkerRuntime:
                 renderer=parser.get_renderer(),
                 llm_service=llm_service,
             )
-            rendered = converter(str(filepath))
-            content, _, _ = text_from_rendered(rendered)
+            if options.output_format == "both":
+                document = converter.build_document(str(filepath))
+                json_renderer = converter.resolve_dependencies(JSONRenderer)
+                markdown_renderer = converter.resolve_dependencies(MarkdownRenderer)
+                rendered_json = json_renderer(document)
+                rendered_markdown = markdown_renderer(document)
+                content, _, _ = text_from_rendered(rendered_json)
+                markdown_content, _, _ = text_from_rendered(rendered_markdown)
+            else:
+                rendered = converter(str(filepath))
+                content, _, _ = text_from_rendered(rendered)
+                markdown_content = None
         except Exception as exc:
             raise MarkerConversionError(f"{type(exc).__name__}: {exc}") from exc
 
@@ -128,6 +146,7 @@ class MarkerRuntime:
             "markdown": "text/markdown; charset=utf-8",
             "html": "text/html; charset=utf-8",
             "json": "application/json",
+            "both": "application/json",
         }[output_format]
         duration = time.perf_counter() - started
         logger.info(
@@ -135,4 +154,4 @@ class MarkerRuntime:
             output_format,
             duration,
         )
-        return ConversionResult(output_format, content, media_type, duration)
+        return ConversionResult(output_format, content, media_type, duration, markdown_content)

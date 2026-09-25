@@ -35,6 +35,15 @@ class JsonRuntime(FakeRuntime):
         return ConversionResult(options.output_format, self.content, "application/json", 0.01)
 
 
+class BothRuntime(JsonRuntime):
+    def convert(self, filepath, options):
+        result = super().convert(filepath, options)
+        return ConversionResult(
+            "both", result.content, "application/json", result.duration_seconds,
+            markdown_content="# Test output",
+        )
+
+
 class FakeHealth:
     async def check(self, settings):
         return VlmCheck(True, {"required": True})
@@ -137,6 +146,25 @@ def test_json_conversion_returns_direct_marker_document():
         assert "success" not in response.json()
 
 
+def test_both_conversion_returns_json_document_and_markdown():
+    fixture_path = Path(__file__).parent / "fixtures" / "marker_json_output_v1.json"
+    content = fixture_path.read_text(encoding="utf-8")
+    app = create_app(
+        Settings(marker_use_llm=False), runtime=BothRuntime(content), vlm_checker=FakeHealth()
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/convert",
+            files={"file": ("input.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
+            data={"output_format": "both"},
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        assert response.headers["x-markerserve-output-format"] == "both"
+        assert response.json()["json"]["children"][0]["id"] == "/page/0"
+        assert response.json()["markdown"] == "# Test output"
+
+
 def test_invalid_json_output_is_rejected():
     app = create_app(
         Settings(marker_use_llm=False), runtime=JsonRuntime("not-json"), vlm_checker=FakeHealth()
@@ -146,6 +174,20 @@ def test_invalid_json_output_is_rejected():
             "/v1/convert",
             files={"file": ("input.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
             data={"output_format": "json"},
+        )
+        assert response.status_code == 500
+        assert response.json()["error"]["code"] == "invalid_json_output"
+
+
+def test_invalid_json_in_both_output_is_rejected():
+    app = create_app(
+        Settings(marker_use_llm=False), runtime=JsonRuntime("not-json"), vlm_checker=FakeHealth()
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/convert",
+            files={"file": ("input.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
+            data={"output_format": "both"},
         )
         assert response.status_code == 500
         assert response.json()["error"]["code"] == "invalid_json_output"

@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-OutputFormat = Literal["markdown", "json", "html"]
+OutputFormat = Literal["markdown", "json", "html", "both"]
 
 
 class ConversionOptions(BaseModel):
