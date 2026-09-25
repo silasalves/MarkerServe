@@ -168,7 +168,7 @@ def build_router(
                 "X-MarkerServe-Output-Format": result.output_format,
                 "X-MarkerServe-Duration-Seconds": f"{result.duration_seconds:.3f}",
             }
-            if result.output_format == "json":
+            if result.output_format in {"json", "both"}:
                 try:
                     payload = json.loads(result.content)
                 except json.JSONDecodeError:
@@ -182,6 +182,17 @@ def build_router(
                         500,
                         "invalid_json_output",
                         "Marker returned an invalid document JSON shape",
+                    )
+                if result.output_format == "both":
+                    if result.markdown_content is None:
+                        return error_response(
+                            500,
+                            "conversion_failed",
+                            "Marker failed to render Markdown output",
+                        )
+                    return JSONResponse(
+                        content={"json": payload, "markdown": result.markdown_content},
+                        headers=headers,
                     )
                 return JSONResponse(content=payload, headers=headers)
             if result.output_format == "html":

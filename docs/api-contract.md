@@ -20,7 +20,7 @@ The request is `multipart/form-data` with a required `file` part and these optio
 | Field | Values | Notes |
 | --- | --- | --- |
 | `file` | PDF upload | Filename must end in `.pdf`; content must begin with `%PDF-` |
-| `output_format` | `markdown`, `json`, `html` | Defaults to configured `MARKER_OUTPUT_FORMAT` |
+| `output_format` | `markdown`, `json`, `html`, `both` | Defaults to configured `MARKER_OUTPUT_FORMAT` |
 | `mode` | `balanced`, `fast` | Passed to Marker |
 | `use_llm` | Boolean | Per-request override |
 | `force_ocr` | Boolean | Passed to Marker’s PDF provider |
@@ -35,7 +35,14 @@ The default maximum upload size is 50 MiB and can be changed with `MAX_UPLOAD_BY
 
 ## Conversion response
 
-Markdown and HTML are returned as text. JSON is returned as `application/json` and is passed through from Marker’s JSON renderer after parsing and re-serializing at the HTTP boundary.
+Markdown and HTML are returned as text. JSON is returned as `application/json` and is passed through from Marker’s JSON renderer after parsing and re-serializing at the HTTP boundary. `output_format=both` returns `application/json` with a `json` property containing the Marker document and a `markdown` property containing Marker’s Markdown output. Both formats are rendered from the same converted document.
+
+```json
+{
+  "json": { "children": [], "block_type": "Document" },
+  "markdown": "Document text"
+}
+```
 
 The expected JSON shape for the pinned upstream version is:
 

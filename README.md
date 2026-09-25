@@ -1,6 +1,6 @@
 # MarkerServe
 
-Production-oriented HTTP service for Marker OCR.
+Production-oriented HTTP service for [Marker](https://github.com/datalab-to/marker) OCR.
 
 MarkerServe wraps the upstream `marker-pdf` Python package with a small FastAPI service and uses native llama.cpp for both Marker’s LLM calls and Surya’s OCR/layout VLM. It is independent of the Marker project: MarkerServe does not fork Marker, patch installed files, or bundle model weights.
 
@@ -109,7 +109,7 @@ GET  /version
 POST /v1/convert
 ```
 
-The conversion endpoint accepts a multipart PDF upload and optional form fields: `output_format` (`markdown`, `json`, or `html`), `mode`, `use_llm`, `force_ocr`, `page_range`, `processors`, `disable_image_extraction`, and `disable_multiprocessing`.
+The conversion endpoint accepts a multipart PDF upload and optional form fields: `output_format` (`markdown`, `json`, `html`, or `both`), `mode`, `use_llm`, `force_ocr`, `page_range`, `processors`, `disable_image_extraction`, and `disable_multiprocessing`.
 
 The upload field is named `file`. The default upload limit is 50 MiB (`MAX_UPLOAD_BYTES`). The filename must end in `.pdf`, and the content must have a `%PDF-` signature. Unknown form fields are rejected with `422 unknown_conversion_options`; in particular, `paginate_output` is not supported.
 
@@ -119,7 +119,7 @@ Example:
 curl.exe -F "file=@sample.pdf" -F "output_format=markdown" http://127.0.0.1:8000/v1/convert
 ```
 
-Markdown and HTML are returned as text responses; JSON is returned as the direct JSON document produced by the pinned `marker-pdf==2.0.0` renderer. MarkerServe does not wrap JSON in a `success`/`output` envelope. The JSON renderer normally returns a document with top-level `children` and `block_type`, with page and block nodes containing fields such as `id`, `block_type`, `html`, `polygon`, `bbox`, and nested `children`. Upstream `metadata` is excluded by MarkerServe. See [`docs/api-contract.md`](docs/api-contract.md) for the compatibility contract and example; [`docs/ariadne-integration.md`](docs/ariadne-integration.md) records the client-side migration notes.
+Markdown and HTML are returned as text responses; JSON is returned as the direct JSON document produced by the pinned `marker-pdf==2.0.0` renderer. With `output_format=both`, the response is JSON with `json` containing that document and `markdown` containing Marker’s Markdown output. MarkerServe excludes upstream JSON metadata. The JSON renderer normally returns a document with top-level `children` and `block_type`, with page and block nodes containing fields such as `id`, `block_type`, `html`, `polygon`, `bbox`, and nested `children`. See [`docs/api-contract.md`](docs/api-contract.md) for the compatibility contract and example.
 
 Every successful conversion includes `X-MarkerServe-Output-Format` and `X-MarkerServe-Duration-Seconds` headers. Errors use the structured shape `{ "error": { "code", "message", "details" } }`.
 
